@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Aug  2 17:25:59 2024
+
+@author: brian
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+import numba
+from numba import njit
+from scipy.ndimage import convolve, generate_binary_structure
+
+plt.style.use(['science', 'notebook', 'grid'])
+
+N = 50
+steps = 400  # Maximum number of frames for the animation
+updates_per_frame = 200 # Number of Metropolis updates per frame
+
+# Initialize the lattice with 75% negative spins
+init_random = np.random.random((N, N))
+lattice_n = np.zeros((N, N))
+lattice_n[init_random >= 0.75] = 1
+lattice_n[init_random < 0.75] = -1
+
+def get_energy(lattice):
+    kern = generate_binary_structure(2, 1)
+    kern[1][1] = False
+    arr = -lattice * convolve(lattice, kern, mode='constant')
+    return arr.sum() / 2
+
+numba.njit("UniTuple(f8[:}, 2)(f8[:,:}, i8, f8, f8)", nopython=True, nogil=True)
+def metropolis(spin_arr, times, BJ):
+    N = spin_arr.shape[0]
+    energy = get_energy(spin_arr)
+    for t in range(times):
+        x = np.random.randint(0, N)
+        y = np.random.randint(0, N)
+        spin_i = spin_arr[x, y]
+        spin_f = spin_i * -1
+        
+        E_i = 0
+        E_f = 0
+        if x > 0:
+            E_i += -spin_i * spin_arr[x-1, y]
+            E_f += -spin_f * spin_arr[x-1, y]
+        if x < N-1:
+            E_i += -spin_i * spin_arr[x+1, y]
+            E_f += -spin_f * spin_arr[x+1, y]
+        if y > 0:
+            E_i += -spin_i * spin_arr[x, y-1]
+            E_f += -spin_f * spin_arr[x, y-1]
+        if y < N-1:
+            E_i += -spin_i * spin_arr[x, y+1]
+            E_f += -spin_f * spin_arr[x, y+1]
+        
+        dE = E_f - E_i
+        if dE <= 0 or (dE > 0 and np.random.random() < np.exp(-BJ * dE)):
+            spin_arr[x, y] = spin_f
+            energy += dE
+    
+    return spin_arr
+
+def update(frame, img, lattice, BJ, text, legend):
+    lattice = metropolis(lattice, updates_per_frame, BJ)
+    img.set_data(lattice)
+    avg_spin = np.mean(lattice)
+    text.set_text(f'Avg Spin: {avg_spin:.2f}')
+    return img, text, legend
+
+fig, ax = plt.subplots()
+img = ax.imshow(lattice_n, vmin=-1, vmax=1)
+text = ax.text(0.02, 0.95, '', transform=ax.transAxes, color='white', bbox=dict(facecolor='black', alpha=0.5))
+
+# Add legend-like text
+legend_text = (
+    'Initial Lattice: 75% Negative Spin\n'
+    f'βJ = {0.2:.1f}\n'
+    'Yellow: Positive Spin\n'
+    'Purple: Negative Spin'
+)
+legend = ax.text(0.02, 0.02, legend_text, transform=ax.transAxes, fontsize=12, verticalalignment='bottom', color='white', bbox=dict(facecolor='black', alpha=0.5))
+
+
+ani = animation.FuncAnimation(
+    fig, update, fargs=(img, lattice_n, 0.2, text, legend), frames=steps, interval=50, blit=True
+)
+
+ax.set_xticks([])
+ax.set_yticks([])
+
+plt.title('2D Ising Model Evolution')
+
+ani.save('ising_model_evolution_75%_BJ=0.2.gif', writer='pillow', fps=20)
