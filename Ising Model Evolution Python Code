@@ -16,8 +16,8 @@ from scipy.ndimage import convolve, generate_binary_structure
 plt.style.use(['science', 'notebook', 'grid'])
 
 N = 50
-steps = 400  # Maximum number of frames for the animation
-updates_per_frame = 200 # Number of Metropolis updates per frame
+steps = 400 
+updates_per_frame = 200 
 
 # Initialize the lattice with 75% negative spins
 init_random = np.random.random((N, N))
